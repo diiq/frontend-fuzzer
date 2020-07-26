@@ -1,30 +1,25 @@
 import { Browser, Page } from "puppeteer";
-import  * as fs from 'fs';
 
-interface Failure {
+
+export interface Failure {
   message: string
   backtrace: string
   payload: any
 }
 
+export type ActionType = "puppeteer" | "browser";
+
 export class Action {
-  type: "puppeteer" | "browser";
-  constructor() {
+  constructor(args?: any[]) {}
 
-  }
+  puppeteerAction: (browser: Browser, page: Page) => Promise<void|Failure>
 
-  async puppeteerAction(browser: Browser, page: Page): Promise<void|Failure>  {
-    throw EvalError("You must override puppeteerAction");
-  }
-
-  async browserAction(): Promise<void|Failure> {
-    throw EvalError("You must override puppeteerAction");
-  }
+  browserAction: () => void | Failure | Promise<void|Failure>;
 
   async act(browser: Browser, page: Page): Promise<void|Failure> {
-    if (this.type == "puppeteer") {
+    if (this.puppeteerAction) {
       return this.puppeteerAction(browser, page)
-    } else if (this.type == "browser") {
+    } else if (this.browserAction) {
       return page.$eval('*', this.browserAction)
     }
   }
