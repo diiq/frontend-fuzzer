@@ -7,32 +7,25 @@ interface Failure {
   payload: any
 }
 
-class Action {
+export class Action {
   type: "puppeteer" | "browser";
   constructor() {
 
   }
 
-  puppeteerAction(browser: Browser, page: Page) {
+  async puppeteerAction(browser: Browser, page: Page): Promise<void|Failure>  {
     throw EvalError("You must override puppeteerAction");
   }
 
-  browserActionFile = "unimplementedBrowserAction.js"
-  browserAction: string;
-  getBrowserAction() {
-    if (this.browserAction) {
-      return this.browserAction;
-    }
-    let path = require('path');
-    let filePath = path.join(__dirname, this.browserActionFile);
-    this.browserAction = fs.readFileSync(filePath).toString();
+  async browserAction(): Promise<void|Failure> {
+    throw EvalError("You must override puppeteerAction");
   }
 
   async act(browser: Browser, page: Page): Promise<void|Failure> {
     if (this.type == "puppeteer") {
-      this.puppeteerAction(browser, page)
+      return this.puppeteerAction(browser, page)
     } else if (this.type == "browser") {
-      this.getBrowserAction()
+      return page.$eval('*', this.browserAction)
     }
   }
 }
