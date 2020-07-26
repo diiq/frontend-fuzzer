@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
+    "target": "ES2015",
     "module": "CommonJS",
     "noImplicitAny": true,
     "outDir": "build",
-    "sourceMap": true
+    "declaration": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]

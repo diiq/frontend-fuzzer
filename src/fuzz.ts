@@ -1,7 +1,12 @@
 import * as puppeteer from 'puppeteer';
-import { Action, Failure } from './actions/action';
-import { TestAction, TestActionSuccess } from './actions/testAction';
+import { Action, Failure } from './action';
 import { printFailure, printWarning } from './output';
+export { UrlGuard } from './guards/url-guard';
+export { ClickAClickable } from './actions/click-a-clickable';
+export { FocusAFocusable } from './actions/focus-a-focusable';
+export { PressAKey } from './actions/press-a-key';
+export { PageErrorTest } from './tests/page-error-test';
+import { waitForNetworkIdle } from './utils';
 
 var puppeteerOptions:puppeteer.LaunchOptions = {};
 if (process.env.CHROME_PATH) {
@@ -33,32 +38,55 @@ if (process.env.CHROME_PATH) {
 // If a guard fails, restart.
 
 export interface ActionFrequency {
-  action: typeof Action
+  action: Action
   frequency: number
   args?: any[]
 }
-export type ActionArgs = typeof Action | { action: typeof Action, args: any[] }
-function isAction(action: ActionArgs): action is typeof Action {
-  let test = (action as { action: typeof Action, args: any[] });
+export type ActionArgs = Action | { action: Action, args: any[] }
+function isAction(action: ActionArgs): action is Action {
+  let test = (action as { action: Action, args: any[] });
   return !(test.action && test.args);
 }
 
 export interface FuzzOptions {
-  startUrl: string
   actions: ActionFrequency[]
   tests: ActionArgs[]
   guards: ActionArgs[]
-  actionCount: number
+  actionCount: number,
+  setup: (instance: PuppeteerInstance) => Promise<void>
 }
 
-async function setupPuppeteer() {
+export interface BrowserEvent {
+  type: "PageError",
+  payload: any
+}
+
+export interface PuppeteerInstance {
+  browser: puppeteer.Browser
+  page: puppeteer.Page
+  history: BrowserEvent[]
+  options: FuzzOptions
+  errorCount: number
+}
+
+async function setupPuppeteer(options: FuzzOptions): Promise<PuppeteerInstance> {
   const browser = await puppeteer.launch(puppeteerOptions);
   const page = await browser.newPage();
-  return {browser, page}
+  return {browser, page, history: [], options, errorCount: 0}
 }
-function reset(page: puppeteer.Page, options: FuzzOptions) {
-  return page.goto(options.startUrl);
+
+function subscribeToEvents(instance: PuppeteerInstance) {
+  instance.page.on("console", msg => {
+    if (["error", "assert"].indexOf(msg.type()) < 0) { return }
+    instance.history.push({ type: "PageError", payload: msg.text() + "\n" + msg.args().map(x => x.jsonValue()).join("\n")});
+  });
 }
+
+function reset(instance: PuppeteerInstance) {
+  instance.history = [];
+  return instance.options.setup(instance)
+}
+
 function pickAction(actions: ActionFrequency[]): ActionFrequency {
   const totalFrequency = actions.reduce((sum, a) => sum + a.frequency, 0);
   const selection = Math.random() * totalFrequency;
@@ -68,79 +96,75 @@ function pickAction(actions: ActionFrequency[]): ActionFrequency {
     return runningTotal >= selection;
   });
 }
-async function fuzzAction(browser: puppeteer.Browser, page: puppeteer.Page, options: FuzzOptions): Promise<void | Failure> {
-  let action = pickAction(options.actions);
+
+async function fuzzAction(instance: PuppeteerInstance): Promise<void | Failure> {
+  let action = pickAction(instance.options.actions);
   try {
-    return await (new action.action(action.args)).act(browser, page)
+    return await action.action(instance, ...(action.args || []))
   } catch(e) {
     return e as Failure
   }
 }
-async function testAction(browser: puppeteer.Browser, page: puppeteer.Page, test: ActionArgs) {
+
+async function nonFuzzAction(instance: PuppeteerInstance, action: ActionArgs) {
   try {
-      if (isAction(test)) {
-      return await new test().act(browser, page)
+      if (isAction(action)) {
+      return await action(instance)
     } else {
-      return await new test.action(test.args).act(browser, page)
+      return await action.action(instance, ...action.args)
     }
   } catch(e) {
     return e as Failure
   }
 }
-async function guardAction(browser: puppeteer.Browser, page: puppeteer.Page, guard: ActionArgs) {
-  try {
-    if (isAction(guard)) {
-      return await new guard().act(browser, page)
-    } else {
-      return await new guard.action(guard.args).act(browser, page)
-    }
-  } catch(e) {
-    return e as Failure
-  }
-}
-async function handleOutcome(page: puppeteer.Page, options: FuzzOptions, action: () => Promise<void | Failure>, printer: (f: Failure) => void = printFailure): Promise<boolean> {
+
+async function handleFailure(instance: PuppeteerInstance, action: () => Promise<void | Failure>): Promise<boolean> {
   let result = await action();
   if (result) {
-    printer(result)
-    await reset(page, options);
+    printFailure(result)
+    instance.errorCount++
+    await instance.page.screenshot({path: `${instance.errorCount}.png`});
+    await reset(instance);
     return true
   }
   return false
 }
 
-async function fuzzOne(browser: puppeteer.Browser, page: puppeteer.Page, options: FuzzOptions) {
-  await handleOutcome(page, options, () => fuzzAction(browser, page, options));
-  for (let i = 0; i < options.tests.length; i++) {
-    if(await handleOutcome(page, options, () => testAction(browser, page, options.tests[i]))) {
-      break;
+async function handleGuard(instance: PuppeteerInstance, action: () => Promise<void | Failure>): Promise<boolean> {
+  let result = await action();
+  if (result) {
+    printWarning(result)
+    await reset(instance);
+    return true
+  }
+  return false
+}
+
+async function fuzzOne(instance: PuppeteerInstance) {
+  if (await handleFailure(instance, () => fuzzAction(instance))) {
+    return
+  }
+  await waitForNetworkIdle(instance.page, 25);
+
+  for (let i = 0; i < instance.options.tests.length; i++) {
+    if(await handleFailure(instance, () => nonFuzzAction(instance, instance.options.tests[i]))) {
+      return;
     }
   }
-  for (let i = 0; i < options.guards.length; i++) {
-    if(await handleOutcome(page, options, () => guardAction(browser, page, options.guards[i]), printWarning)) {
-      break;
+  for (let i = 0; i < instance.options.guards.length; i++) {
+    if(await handleGuard(instance, () => nonFuzzAction(instance, instance.options.guards[i]))) {
+      return;
     }
   }
 }
 
-async function fuzz(options: FuzzOptions) {
-  const {browser, page} = await setupPuppeteer()
-  await reset(page, options);
+export async function fuzz(options: FuzzOptions) {
+  const instance = await setupPuppeteer(options)
+  await reset(instance);
+  subscribeToEvents(instance);
 
   for(var i = 0; i < options.actionCount; i++) {
-    await fuzzOne(browser, page, options);
+    await fuzzOne(instance);
   }
-  await browser.close();
+  await instance.browser.close();
 }
-
-
-let options: FuzzOptions = {
-  actionCount: 100,
-  actions: [
-    {action: TestAction, frequency: 0.1},
-    {action: TestActionSuccess, frequency: 1}
-  ],
-  guards: [],
-  tests: [],
-  startUrl: 'https://google.com'
-}
-fuzz(options);

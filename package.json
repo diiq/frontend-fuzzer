@@ -2,18 +2,20 @@
   "name": "frontend-fuzz",
   "version": "1.0.0",
   "description": "A headless-chrome UI fuzzing setup",
-  "main": "index.js",
+  "main": "build/fuzz.js",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "fuzz": "node -r dotenv/config build/fuzz.js"
+    "fuzz": "node -r dotenv/config example.js"
   },
   "author": "",
   "license": "ISC",
-  "dependencies": {
+  "devDependencies": {
     "@types/puppeteer": "^3.0.1",
-    "dotenv": "^8.2.0",
-    "puppeteer": "^5.2.1",
     "typescript": "^3.9.7"
+  },
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "puppeteer": "^5.2.1"
   }
 }
