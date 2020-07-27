@@ -1,6 +1,6 @@
 {
-  "name": "frontend-fuzz",
-  "version": "0.0.1",
+  "name": "frontend-fuzzer",
+  "version": "0.0.2",
   "description": "A headless-chrome UI fuzzing setup",
   "main": "build/index.js",
   "repository": "https://github.com/diiq/frontend-fuzzer",

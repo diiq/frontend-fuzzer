@@ -32,7 +32,7 @@ The fuzzing loop is as follows:
 ## Usage
 
 ```
-yarn install frontend-fuzzer
+npm install --save-dev frontend-fuzzer
 ```
 
 ```js
