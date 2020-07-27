@@ -3,7 +3,7 @@ import { PuppeteerInstance } from "./fuzz";
 
 export interface Failure {
   message: string
-  backtrace?: string
+  backtrace?: string[]
   payload?: any
 }
 

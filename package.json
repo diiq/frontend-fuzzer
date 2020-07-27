@@ -1,21 +1,21 @@
 {
   "name": "frontend-fuzz",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "A headless-chrome UI fuzzing setup",
-  "main": "build/fuzz.js",
+  "main": "build/index.js",
+  "repository": "https://github.com/diiq/frontend-fuzzer",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "fuzz": "node -r dotenv/config example.js"
+    "example": "node example.js"
   },
-  "author": "",
+  "author": "Sam Bleckley <sam@sambleckley.com>",
   "license": "ISC",
   "devDependencies": {
     "@types/puppeteer": "^3.0.1",
     "typescript": "^3.9.7"
   },
   "dependencies": {
-    "dotenv": "^8.2.0",
     "puppeteer": "^5.2.1"
   }
 }

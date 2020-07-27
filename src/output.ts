@@ -9,14 +9,18 @@ function consoleYellow(string: string) {
 }
 
 export function consoleTemporary(string: string) {
-  process.stdout.write(string + '\r');
+  process.stdout.write('\x1b[K' + string + '\r');
 }
 
-export function printFailure(failure: Failure) {
-  consoleRed("\nFailure: ")
-  console.log(failure.message);
-  console.log(failure)
-  // TODO: backtrace, payload
+export function printFailure(failure: Failure, count: number) {
+  consoleRed(`\n[Failure ${count}]:`)
+  console.log("  " + failure.message);
+  if (failure.backtrace) {
+    console.log("  " + failure.backtrace.join("\n  "))
+  }
+  if (failure.payload) {
+    console.log("  " + failure.payload);
+  }
 }
 
 export function printWarning(failure: Failure) {

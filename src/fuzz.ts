@@ -1,17 +1,7 @@
 import * as puppeteer from 'puppeteer';
 import { Action, Failure } from './action';
 import { printFailure, printWarning } from './output';
-export { UrlGuard } from './guards/url-guard';
-export { ClickAClickable } from './actions/click-a-clickable';
-export { FocusAFocusable } from './actions/focus-a-focusable';
-export { PressAKey } from './actions/press-a-key';
-export { PageErrorTest } from './tests/page-error-test';
 import { waitForNetworkIdle } from './utils';
-
-var puppeteerOptions:puppeteer.LaunchOptions = {};
-if (process.env.CHROME_PATH) {
-  puppeteerOptions = {...puppeteerOptions, executablePath: process.env.CHROME_PATH}
-}
 
 export interface ActionFrequency {
   action: Action
@@ -29,6 +19,7 @@ export interface FuzzOptions {
   tests: ActionArgs[]
   guards: ActionArgs[]
   actionCount: number,
+  chromiumExecutablePath?: string,
   setup: (instance: PuppeteerInstance) => Promise<void>
 }
 
@@ -46,7 +37,7 @@ export interface PuppeteerInstance {
 }
 
 async function setupPuppeteer(options: FuzzOptions): Promise<PuppeteerInstance> {
-  const browser = await puppeteer.launch(puppeteerOptions);
+  const browser = await puppeteer.launch((options.chromiumExecutablePath ? {executablePath: options.chromiumExecutablePath} : {}));
   const page = await browser.newPage();
   return {browser, page, history: [], options, errorCount: 0}
 }
@@ -97,8 +88,8 @@ async function nonFuzzAction(instance: PuppeteerInstance, action: ActionArgs) {
 async function handleFailure(instance: PuppeteerInstance, action: () => Promise<void | Failure>): Promise<boolean> {
   let result = await action();
   if (result) {
-    printFailure(result)
     instance.errorCount++
+    printFailure(result, instance.errorCount)
     await instance.page.screenshot({path: `${instance.errorCount}.png`});
     await reset(instance);
     return true
